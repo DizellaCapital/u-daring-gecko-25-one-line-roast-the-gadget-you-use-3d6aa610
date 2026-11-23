@@ -1,53 +1,61 @@
 #!/usr/bin/env python3
-"""One-Line Roast: The Gadget You Use Every Day.
+"""One-line roast entry for the make.fun bounty
+"One-Line Roast: The Gadget You Use Every Day".
 
-Writes a single original roast line (119 characters) to entry.txt in
-the output directory the harness provides. The line is fixed: the
-same text on every run. Standard library only, no network access,
-no randomness, no input files.
+Writes a single original roast line about a gadget used every day to
+MAKEFUN_OUTPUT_DIR/entry.txt (falling back to /output/entry.txt).
+Python 3.13, standard library only, deterministic, no network access.
 """
 
 import os
 import sys
 
-ROAST = (
-    "My printer only jams when the document is urgent"
-    " \u2014 which is how I learned it can read,"
-    " and that it hates me personally."
+# The roast line. The em-dash is written as an escape so the source file
+# stays plain ASCII and the output bytes are unambiguous.
+LINE = (
+    "My printer only jams when the document is urgent "
+    "\u2014 which is how I learned it can read, "
+    "and that it hates me personally."
 )
 
-CHAR_LIMIT = 200
+MAX_CHARS = 200
 
 
-def _check(line):
-    """Refuse anything the gate would refuse: outside 1-200 chars,
-    blank, multi-line, or carrying control characters."""
-    n = len(line)
-    if n < 1 or n > CHAR_LIMIT:
-        raise SystemExit(f"roast is {n} characters, gate needs 1-{CHAR_LIMIT}")
-    if not line.strip():
-        raise SystemExit("roast must not be only whitespace")
-    if line.strip() != line:
-        raise SystemExit("roast must not start or end with whitespace")
-    for ch in line:
-        if ch in "\n\r" or ord(ch) < 32:
-            raise SystemExit("roast must be one line with no control characters")
+def validate(line):
+    """Check the line against the bounty gate before writing it."""
+    if not line:
+        raise ValueError("roast line is empty")
+    if line != line.strip():
+        raise ValueError("roast line has leading or trailing whitespace")
+    if "\n" in line or "\r" in line:
+        raise ValueError("roast line must be a single line")
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in line):
+        raise ValueError("roast line contains control characters")
+    if not any(ch.isalpha() for ch in line):
+        raise ValueError("roast line must contain at least one letter")
+    if len(line) > MAX_CHARS:
+        raise ValueError(
+            "roast line is %d characters, over the %d limit"
+            % (len(line), MAX_CHARS)
+        )
+    return line
 
 
-def _out_dir():
-    return os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
-
-
-def run():
-    _check(ROAST)
-    os.makedirs(_out_dir(), exist_ok=True)
-    target = os.path.join(_out_dir(), "entry.txt")
-    with open(target, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(ROAST + "\n")
-    return ROAST
+def main(argv):
+    line = validate(LINE)
+    if "--count" in argv:
+        print(
+            "%d characters, %d bytes"
+            % (len(line), len(line.encode("utf-8")))
+        )
+        return 0
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "entry.txt")
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(line)
+    return 0
 
 
 if __name__ == "__main__":
-    text = run()
-    if "--count" in sys.argv[1:]:
-        print(f"{len(text)} characters, {len(text.encode('utf-8'))} bytes")
+    sys.exit(main(sys.argv[1:]))
